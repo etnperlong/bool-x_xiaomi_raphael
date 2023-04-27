@@ -3431,6 +3431,7 @@ void wake_up_new_task(struct task_struct *p)
 	 * Use __set_task_cpu() to avoid calling sched_class::migrate_task_rq,
 	 * as we're not fully set-up yet.
 	 */
+	p->recent_used_cpu = task_cpu(p);
 	__set_task_cpu(p, select_task_rq(p, task_cpu(p), SD_BALANCE_FORK, 0, 1));
 #endif
 	rq = __task_rq_lock(p, &rf);
@@ -6614,12 +6615,14 @@ void idle_task_exit(void)
 	struct mm_struct *mm = current->active_mm;
 
 	BUG_ON(cpu_online(smp_processor_id()));
+	BUG_ON(current != this_rq()->idle);
 
 	if (mm != &init_mm) {
 		switch_mm(mm, &init_mm, current);
 		finish_arch_post_lock_switch();
 	}
-	mmdrop(mm);
+
+	/* finish_cpu(), as ran on the BP, will clean up the active_mm state */
 }
 
 /*
@@ -6804,8 +6807,6 @@ int do_isolation_work_cpu_stop(void *data)
 	struct rq *rq = cpu_rq(cpu);
 	struct rq_flags rf;
 
-	watchdog_disable(cpu);
-
 	local_irq_disable();
 
 	irq_migrate_all_off_this_cpu();
@@ -6952,7 +6953,10 @@ int sched_isolate_cpu(int cpu)
 	smp_call_function_any(&avail_cpus, hrtimer_quiesce_cpu, &cpu, 1);
 	smp_call_function_any(&avail_cpus, timer_quiesce_cpu, &cpu, 1);
 
+	watchdog_disable(cpu);
+	irq_lock_sparse();
 	stop_cpus(cpumask_of(cpu), do_isolation_work_cpu_stop, 0);
+	irq_unlock_sparse();
 
 	calc_load_migrate(rq);
 	update_max_interval();
