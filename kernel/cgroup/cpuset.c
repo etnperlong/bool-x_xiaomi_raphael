@@ -1539,7 +1539,9 @@ static void cpuset_cancel_attach(struct cgroup_taskset *tset)
 	cs = css_cs(css);
 
 	mutex_lock(&cpuset_mutex);
-	css_cs(css)->attach_in_progress--;
+	cs->attach_in_progress--;
+	if (!cs->attach_in_progress)
+		wake_up(&cpuset_attach_wq);
 	mutex_unlock(&cpuset_mutex);
 }
 
@@ -1804,6 +1806,8 @@ static ssize_t cpuset_write_resmask_wrapper(struct kernfs_open_file *of,
 		{ "background",		CONFIG_CPUSET_BG },
 		{ "camera-daemon",	CONFIG_CPUSET_CAMERA },
 		{ "foreground",		CONFIG_CPUSET_FG },
+		{ "game",		CONFIG_CPUSET_GAME },	
+		{ "gamelite",		CONFIG_CPUSET_GAME },			
 		{ "restricted",		CONFIG_CPUSET_RESTRICTED },
 		{ "system-background",	CONFIG_CPUSET_SYSTEM_BG },
 		{ "top-app",		CONFIG_CPUSET_TOP_APP },
@@ -2135,10 +2139,11 @@ static void uclamp_set(struct kernfs_open_file *of,
 		{"top-app",    	     	"10", "max", 1, 1},  // 10-100%
 		{"foreground", 	     	"10", "80",  1, 0},  // 10-80%
 		{"background", 	     	"0",  "50",  0, 0},  // 0-50%
-		{"system-background", 	"0",  "50",  0, 0},  // 0-60%
+		{"system-background", 	"0",  "50",  0, 0},  // 0-50%
 		{"restricted",          "0",  "20",  0, 0},  // 0-20%
-		{"display",             "20", "100", 1, 1},
+		{"display",             "20", "100", 1, 0},  // 20-100%
 		{"camera-daemon",       "20", "max", 1, 1},  // 20-100%
+		{"game",                "50", "max", 1, 1},  // 80-100%
 	};
 
 	for (i = 0; i < ARRAY_SIZE(tgts); i++) {
